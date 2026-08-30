@@ -3,245 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini FPS Game 3D</title>
+    <title>Classic FPS Raycaster (Wolfenstein 3D Style)</title>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
-            background-color: #000;
-            font-family: Arial, sans-serif;
-        }
-        /* Tâm ngắm bắn giữa màn hình */
-        #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            transform: translate(-50%, -50%);
-            border: 2px solid rgba(255, 255, 255, 0.7);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 10;
-        }
-        /* Bảng điểm và hướng dẫn */
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px #000;
-            pointer-events: none;
-            z-index: 10;
-        }
-        #instructions {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            color: white;
+            background-color: #111;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-size: 24px;
-            cursor: pointer;
-            z-index: 20;
+            height: 100vh;
+            font-family: monospace;
+            color: #00ff00;
+            overflow: hidden;
+        }
+        canvas {
+            border: 4px solid #333;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+        }
+        #instructions {
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
         }
     </style>
-    <!-- Tải thư viện Three.js bản ổn định -->
-    <script src="https://cloudflare.com"></script>
 </head>
 <body>
 
-    <div id="crosshair"></div>
-    <div id="ui">Điểm: <span id="score">0</span></div>
+    <div style="font-size: 20px; margin-bottom: 10px; font-weight: bold;">HỆ THỐNG FPS RAYCASTING RE-RENDERED</div>
+    <canvas id="gameCanvas" width="640" height="400"></canvas>
     <div id="instructions">
-        <h2>BẤM VÀO ĐÂY ĐỂ CHƠI</h2>
-        <p>Di chuyển: W, A, S, D | Ngắm: Chuột | Bắn: Chuột trái</p>
+        ĐIỀU KHIỂN: Phím mũi tên [↑][↓] Tiến/Lùi | [←][→] Quay góc nhìn | [SPACEBAR] Bắn mục tiêu màu xanh
     </div>
 
     <script>
-        // --- 1. KHỞI TẠO HỆ THỐNG THREE.JS ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
-        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05); // Hiệu ứng sương mù chuyên nghiệp
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        // --- 1. BẢN ĐỒ MÊ CUNG (1 là tường, 0 là đường đi, 2 là mục tiêu) ---
+        const mapWidth = 12;
+        const mapHeight = 12;
+        const gameMap = [,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+            [1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
 
-        // --- 2. ÁNH SÁNG (LIGHTING) ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
-        scene.add(directionalLight);
+        // --- 2. THÔNG SỐ NGƯỜI CHƠI ---
+        let playerX = 2.5;     // Vị trí X trong bản đồ
+        let playerY = 2.5;     // Vị trí Y trong bản đồ
+        let playerAngle = 0;   // Góc nhìn (tính bằng Radian)
+        const fov = Math.PI / 3; // Trường nhìn (60 độ)
+        const numRays = 320;   // Số lượng tia quét quét màn hình (độ phân giải chiều ngang)
 
-        // --- 3. ĐỊA HÌNH & THẾ GIỚI (FLOOR & OBSTACLES) ---
-        // Sàn nhà dạng lưới
-        const floorGeo = new THREE.PlaneGeometry(100, 100);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x16213e, roughness: 0.8 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
-
-        // Tạo các khối hộp vật cản ngẫu nhiên trong không gian
-        const boxGeo = new THREE.BoxGeometry(4, 8, 4);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0x0f3460 });
-        for (let i = 0; i < 30; i++) {
-            const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set((Math.random() - 0.5) * 80, 4, (Math.random() - 0.5) * 80);
-            scene.add(box);
-        }
-
-        // --- 4. KHỞI TẠO ĐỐI TƯỢNG GAME ---
-        camera.position.set(0, 2, 0); // Đặt camera ngang tầm mắt người (cao 2 đơn vị)
-        
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        // Trạng thái nút bấm
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
+        let isShooting = false;
+        let shootTimer = 0;
         let score = 0;
-        const targets = [];
-        const bullets = [];
 
-        // Hệ thống góc nhìn (Yaw/Pitch) giống hệt các game FPS chuyên nghiệp
-        let yaw = 0;
-        let pitch = 0;
-        const mouseSensitivity = 0.002;
-
-        // --- 5. ĐIỀU KHIỂN & KHÓA CHUỘT (POINTER LOCK) ---
-        const instructions = document.getElementById('instructions');
-        
-        instructions.addEventListener('click', () => {
-            document.body.requestPointerLock();
+        // Lắng nghe bàn phím
+        window.addEventListener("keydown", (e) => { 
+            if(e.code === "Space") { keys.Space = true; }
+            else if(e.key in keys) keys[e.key] = true; 
+        });
+        window.addEventListener("keyup", (e) => { 
+            if(e.code === "Space") keys.Space = false;
+            else if(e.key in keys) keys[e.key] = false; 
         });
 
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) {
-                instructions.style.display = 'none';
-            } else {
-                instructions.style.display = 'flex';
-            }
-        });
+        // --- 3. THUẬT TOÁN QUÉT TIA RAYCASTING (BIẾN 2D THÀNH 3D) ---
+        function renderRaycast() {
+            const rayAngleStep = fov / numRays;
+            const startAngle = playerAngle - fov / 2;
 
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement !== document.body) return;
-            
-            yaw -= e.movementX * mouseSensitivity;
-            pitch -= e.movementY * mouseSensitivity;
-            
-            // Giới hạn góc nhìn lên/xuống (không cho lật ngược camera)
-            pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitch));
-            
-            camera.rotation.set(0, 0, 0); // Reset
-            camera.rotation.y = yaw;
-            camera.rotation.x = pitch;
-        });
+            for (let i = 0; i < numRays; i++) {
+                let rayAngle = startAngle + i * rayAngleStep;
+                let distance = 0;
+                let hitWall = false;
+                let hitTarget = false;
 
-        // Bắt sự kiện bàn phím
-        const onKeyDown = (e) => {
-            if (e.code === 'KeyW' || e.code === 'ArrowUp') moveForward = true;
-            if (e.code === 'KeyS' || e.code === 'ArrowDown') moveBackward = true;
-            if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveLeft = true;
-            if (e.code === 'KeyD' || e.code === 'ArrowRight') moveRight = true;
-        };
-        const onKeyUp = (e) => {
-            if (e.code === 'KeyW' || e.code === 'ArrowUp') moveForward = false;
-            if (e.code === 'KeyS' || e.code === 'ArrowDown') moveBackward = false;
-            if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveLeft = false;
-            if (e.code === 'KeyD' || e.code === 'ArrowRight') moveRight = false;
-        };
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('keyup', onKeyUp);
+                // Các vector hướng của tia nghiệm
+                let eyeX = Math.cos(rayAngle);
+                let eyeY = Math.sin(rayAngle);
 
-        // --- 6. CƠ CHẾ BẮN SÚNG (SHOOTING) ---
-        document.addEventListener('mousedown', (e) => {
-            if (document.pointerLockElement !== document.body || e.button !== 0) return;
+                // Quét tìm va chạm vật cản
+                while (!hitWall && distance < 16) {
+                    distance += 0.05;
+                    let testX = Math.floor(playerX + eyeX * distance);
+                    let testY = Math.floor(playerY + eyeY * distance);
 
-            // Tạo viên đạn (hình cầu nhỏ màu neon)
-            const bulletGeo = new THREE.SphereGeometry(0.15, 8, 8);
-            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xe94560 });
-            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-            
-            bullet.position.copy(camera.position);
-            
-            // Lấy hướng vector nhìn của camera để làm hướng bay cho đạn
-            const direction = new THREE.Vector3();
-            camera.getWorldDirection(direction);
-            
-            bullet.userData = { direction: direction.clone(), aliveTime: 0 };
-            bullets.push(bullet);
-            scene.add(bullet);
-        });
-
-        // --- 7. TẠO KẺ ĐỊCH (MỤC TIÊU BAY) ---
-        function spawnTarget() {
-            if (targets.length > 10) return; // Giới hạn tối đa 10 mục tiêu cùng lúc
-            const targetGeo = new THREE.BoxGeometry(2, 2, 2);
-            const targetMat = new THREE.MeshStandardMaterial({ color: 0xe94560, emissive: 0x440000 });
-            const target = new THREE.Mesh(targetGeo, targetMat);
-            
-            // Xuất hiện ngẫu nhiên xung quanh người chơi
-            target.position.set(
-                (Math.random() - 0.5) * 60,
-                Math.random() * 5 + 2,
-                (Math.random() - 0.5) * 60
-            );
-            // Hướng di chuyển ngẫu nhiên
-            target.userData = { 
-                velocity: new THREE.Vector3((Math.random()-0.5)*0.1, 0, (Math.random()-0.5)*0.1) 
-            };
-            targets.push(target);
-            scene.add(target);
-        }
-        setInterval(spawnTarget, 2000); // Cứ 2 giây tạo 1 con mới
-
-        // --- 8. VÒNG LẶP GAME (GAME LOOP) ---
-        const clock = new THREE.Clock();
-        const playerSpeed = 12;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-
-            if (document.pointerLockElement === document.body) {
-                // --- Xử lý di chuyển người chơi ---
-                const direction = new THREE.Vector3();
-                const frontVector = new THREE.Vector3(0, 0, (moveBackward ? 1 : 0) - (moveForward ? 1 : 0));
-                const sideVector = new THREE.Vector3((moveRight ? 1 : 0) - (moveLeft ? 1 : 0), 0, 0);
-                
-                direction.copy(frontVector).applyQuaternion(camera.quaternion);
-                direction.add(sideVector.applyQuaternion(camera.quaternion));
-                direction.y = 0; // Giữ người chơi trên mặt đất, không cho bay lên khi ngước nhìn lên
-                direction.normalize();
-                
-                camera.position.addScaledVector(direction, playerSpeed * delta);
-
-                // --- Xử lý vật lý đạn ---
-                for (let i = bullets.length - 1; i >= 0; i--) {
-                    const b = bullets[i];
-                    b.position.addScaledVector(b.userData.direction, 60 * delta); // Tốc độ đạn bay
-                    b.userData.aliveTime += delta;
-
-                    // Xóa đạn nếu bay quá xa (quá 2 giây)
-                    if (b.userData.aliveTime > 2) {
-                        scene.remove(b);
-                        bullets.splice(i, 1);
-                        continue;
+                    // Nếu tia bay ra ngoài bản đồ
+                    if (testX < 0 || testX >= mapWidth || testY < 0 || testY >= mapHeight) {
+                        hitWall = true;
+                        distance = 16;
+                    } else {
+                        // Trúng tường thông thường
+                        if (gameMap[testY][testX] === 1) {
+                            hitWall = true;
+                        }
+                        // Trúng mục tiêu xanh lá
+                        if (gameMap[testY][testX] === 2) {
+                            hitWall = true;
+                            hitTarget = true;
+                            // Nếu người chơi đang bấm bắn và tia này nằm ở giữa tâm ngắm
+                            if (isShooting && i > numRays/2 - 10 && i < numRays/2 + 10) {
+                                gameMap[testY][testX] = 0; // Tiêu diệt mục tiêu
+                                score += 100;
+                                // Hồi sinh mục tiêu ở chỗ ngẫu nhiên khác
+                                setTimeout(spawnNewTarget, 2000);
+                            }
+                        }
                     }
+                }
 
-                    // Kiểm tra va chạm giữa đạn và mục tiêu
-                    for (let j = targets.length - 1; j >= 0; j--) {
-                        const t = targets[j];
-                        if (b.position.distanceTo(t.position) < 1.5) {
-                            // Tạo hiệu ứng trúng mục tiêu
-                            score += 10;
-                            document.getElementById('score').innerText = score;
-                            
-                            scene.remove(t);
-                            targets.splice(j, 1);scene.remove(b);bullets.splice(i, 1);break;}}}// --- Xử lý di chuyển và hoạt ảnh của mục tiêu ---
-                for (let i = 0; i < targets.length; i++) {const t = targets[i];t.position.add(t.userData.velocity);t.rotation.x += 0.01;t.rotation.y += 0.02;// Giữ mục tiêu không bay quá xa bản đồif 
-                                                          (Math.abs(t.position.x) > 50 || Math.abs(t.position.z) > 50) {t.userData.velocity.negate();}}}renderer.render(scene, camera);}// Tự động thay đổi kích thước game khi phóng to/thu nhỏ trình duyệt
-        window.addEventListener('resize', () => {camera.aspect = window.innerWidth / window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth, window.innerHeight);});animate();
+                // Sửa lỗi hiệu ứng thấu kính mắt cá (Fish-eye hiệu chỉnh)
+                let correctedDistance = distance * Math.cos(rayAngle - playerAngle);
+
+                // Tính toán chiều cao bức tường dựa trên khoảng cách
+                let wallHeight = Math.min(canvas.height, (canvas.height / correctedDistance));
+
+                // Tính toán vị trí vẽ dải tường đứng
+                let ceiling = (canvas.height / 2) - (wallHeight / 2);
+                let floor = canvas.height - ceiling;
+
+                // Chọn màu sắc: Càng ở xa màu càng tối
+                let colorValue = Math.max(20, 200 - correctedDistance * 12);
+                
+                // Vẽ Trần nhà (Màu xám tối)
+                ctx.fillStyle = "#111";
+                ctx.fillRect(i * (canvas.width / numRays), 0, (canvas.width / numRays) + 1, ceiling);
+
+                // Vẽ Tường (Tường thường màu đỏ, Mục tiêu màu xanh)
+                if (hitTarget) {
+                    ctx.fillStyle = `rgb(0, ${colorValue}, 0)`; // Màu xanh lá cho mục tiêu
+                } else {
+                    ctx.fillStyle = `rgb(${colorValue}, ${colorValue * 0.3}, ${colorValue * 0.3})`; // Màu gạch nung cho tường thường
+                }
+                ctx.fillRect(i * (canvas.width / numRays), ceiling, (canvas.width / numRays) + 1, wallHeight);
+
+                // Vẽ Sàn nhà (Màu xám sáng hơn trần)
+                ctx.fillStyle = "#222";
+                ctx.fillRect(i * (canvas.width / numRays), floor, (canvas.width / numRays) + 1, canvas.height - floor);
+            }
+        }
+
+        // Hồi sinh mục tiêu ngẫu nhiên trên bản đồ trống
+        function spawnNewTarget() {
+            let spawned = false;
+            while(!spawned) {
+                let rx = Math.floor(Math.random() * mapWidth);
+                let ry = Math.floor(Math.random() * mapHeight);
+                if(gameMap[ry][rx] === 0 && (Math.abs(rx - playerX) > 2)) {
+                    gameMap[ry][rx] = 2;
+                    spawned = true;
+                }
+            }
+        }
+
+        // --- 4. HÌNH ẢNH HIỂN THỊ KHẨU SÚNG (2D OVERLAY) ---
+        function drawWeapon() {
+            ctx.lineWidth = 4;
+            // Vẽ tâm ngắm cố định giữa màn hình
+            ctx.strokeStyle = "rgba(255,255,255,0.4)";
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Hiệu ứng giật súng và tia lửa khi bắn
+            let gunOffset = 0;
+            if (isShooting) {
+                gunOffset = Math.sin(shootTimer * 0.5) * 15;
+                
+                // Vẽ tia lửa flash của nòng súng
+                ctx.fillStyle = "#ffff00";
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height - 120, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Vẽ báng súng FPS đơn giản
+            ctx.fillStyle = "#555";
+            ctx.fillRect(canvas.width / 2 - 20, canvas.height - 100 + gunOffset, 40, 100);
+            ctx.fillStyle = "#333";
+            ctx.fillRect(canvas.width / 2 - 10, canvas.height - 120 + gunOffset, 20, 30);
+        }
+
+        // Vẽ UI hiển thị điểm số
+        function drawUI() {
+            ctx.fillStyle = "#00ff00";
+            ctx.font = "bold 18px monospace";
+            ctx.fillText(`THIẾT LẬP KẾT NỐI TÁC CHIẾN`, 20, 35);
+            ctx.fillText(`ĐIỂM SỐ CHƠI: ${score}`, 20, 60);
+        }
+
+        // --- 5. VÒNG LẶP XỬ LÝ GAMEPLAY CHÍNH ---
+        let lastTime = performance.now();
+
+        function updateGame() {
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000; // Thời gian thực giữa các khung hình
+            lastTime = now;
+
+            // Tốc độ di chuyển và tốc độ quay góc nhìn
+            const moveSpeed = 3.0 * delta; 
+            const rotateSpeed = 2.5 * delta;
+
+            // Xử lý xoay góc nhìn trái/phải
+            if (keys.ArrowLeft) playerAngle -= rotateSpeed;
+            if (keys.ArrowRight) playerAngle += rotateSpeed;
+
+            // Xử lý tiến lùi dựa trên ma trận lượng giác để đi đúng hướng mặt nhìn
+            let newX = playerX;
+            let newY = playerY;
+
+            if (keys.ArrowUp) {
+                newX += Math.cos(playerAngle) * moveSpeed;
+                newY += Math.sin(playerAngle) * moveSpeed;
+            }
+            if (keys.ArrowDown) {
+                newX -= Math.cos(playerAngle) * moveSpeed;
+                newY -= Math.sin(playerAngle) * moveSpeed;
+            }
+
+            // Kiểm tra va chạm với tường trước khi di chuyển vào (Tránh đi xuyên tường)
+            if (gameMap[Math.floor(playerY)][Math.floor(newX)] !== 1) playerX = newX;
+            if (gameMap[Math.floor(newY)][Math.floor(playerX)] !== 1) playerY = newY;
+
+            // Xử lý sự kiện bắn súng liên tục bằng phím Space
+            if (keys.Space && !isShooting) {
+                isShooting = true;
+                shootTimer = 0;
+            }
+            if (isShooting) {
+            shootTimer += 1;
+            if (shootTimer > 6) { // Hoàn thành hoạt ảnh giật súng sau 6 khung hình
+            isShooting = false;
+            }
+            }
+            // Render lại toàn bộ thế giới
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            renderRaycast();
+            drawWeapon();
+            drawUI();
+            requestAnimationFrame(updateGame);
+        }
+            // Khởi động hệ thống trò chơi
+            updateGame();
+        
