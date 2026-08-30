@@ -11,7 +11,7 @@
             background-color: #000;
             font-family: Arial, sans-serif;
         }
-       
+        /* Tâm ngắm bắn giữa màn hình */
         #crosshair {
             position: absolute;
             top: 50%;
@@ -24,7 +24,7 @@
             pointer-events: none;
             z-index: 10;
         }
-      
+        /* Bảng điểm và hướng dẫn */
         #ui {
             position: absolute;
             top: 20px;
@@ -51,12 +51,11 @@
             z-index: 20;
         }
     </style>
-   
+    <!-- Tải thư viện Three.js bản ổn định -->
     <script src="https://cloudflare.com"></script>
 </head>
 <body>
-    <h3><a href="index.html">Quay Trở Lại</a></h3>
-    <hr>
+
     <div id="crosshair"></div>
     <div id="ui">Điểm: <span id="score">0</span></div>
     <div id="instructions">
@@ -65,31 +64,32 @@
     </div>
 
     <script>
-     
+        // --- 1. KHỞI TẠO HỆ THỐNG THREE.JS ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
-        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05); // Hiệu ứng sương mù chuyên nghiệp
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-     
+        // --- 2. ÁNH SÁNG (LIGHTING) ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 20, 10);
         scene.add(directionalLight);
 
-      
+        // --- 3. ĐỊA HÌNH & THẾ GIỚI (FLOOR & OBSTACLES) ---
+        // Sàn nhà dạng lưới
         const floorGeo = new THREE.PlaneGeometry(100, 100);
         const floorMat = new THREE.MeshStandardMaterial({ color: 0x16213e, roughness: 0.8 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-      
+        // Tạo các khối hộp vật cản ngẫu nhiên trong không gian
         const boxGeo = new THREE.BoxGeometry(4, 8, 4);
         const boxMat = new THREE.MeshStandardMaterial({ color: 0x0f3460 });
         for (let i = 0; i < 30; i++) {
@@ -98,20 +98,20 @@
             scene.add(box);
         }
 
-    
-        camera.position.set(0, 2, 0); 
+        // --- 4. KHỞI TẠO ĐỐI TƯỢNG GAME ---
+        camera.position.set(0, 2, 0); // Đặt camera ngang tầm mắt người (cao 2 đơn vị)
         
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let score = 0;
         const targets = [];
         const bullets = [];
 
-     
+        // Hệ thống góc nhìn (Yaw/Pitch) giống hệt các game FPS chuyên nghiệp
         let yaw = 0;
         let pitch = 0;
         const mouseSensitivity = 0.002;
 
-      
+        // --- 5. ĐIỀU KHIỂN & KHÓA CHUỘT (POINTER LOCK) ---
         const instructions = document.getElementById('instructions');
         
         instructions.addEventListener('click', () => {
@@ -132,15 +132,15 @@
             yaw -= e.movementX * mouseSensitivity;
             pitch -= e.movementY * mouseSensitivity;
             
-         
+            // Giới hạn góc nhìn lên/xuống (không cho lật ngược camera)
             pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitch));
             
-            camera.rotation.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0); // Reset
             camera.rotation.y = yaw;
             camera.rotation.x = pitch;
         });
 
-      
+        // Bắt sự kiện bàn phím
         const onKeyDown = (e) => {
             if (e.code === 'KeyW' || e.code === 'ArrowUp') moveForward = true;
             if (e.code === 'KeyS' || e.code === 'ArrowDown') moveBackward = true;
@@ -156,18 +156,18 @@
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
 
-       
+        // --- 6. CƠ CHẾ BẮN SÚNG (SHOOTING) ---
         document.addEventListener('mousedown', (e) => {
             if (document.pointerLockElement !== document.body || e.button !== 0) return;
 
-           
+            // Tạo viên đạn (hình cầu nhỏ màu neon)
             const bulletGeo = new THREE.SphereGeometry(0.15, 8, 8);
             const bulletMat = new THREE.MeshBasicMaterial({ color: 0xe94560 });
             const bullet = new THREE.Mesh(bulletGeo, bulletMat);
             
             bullet.position.copy(camera.position);
             
-           
+            // Lấy hướng vector nhìn của camera để làm hướng bay cho đạn
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
             
@@ -176,29 +176,29 @@
             scene.add(bullet);
         });
 
-       
+        // --- 7. TẠO KẺ ĐỊCH (MỤC TIÊU BAY) ---
         function spawnTarget() {
-            if (targets.length > 10) return;
+            if (targets.length > 10) return; // Giới hạn tối đa 10 mục tiêu cùng lúc
             const targetGeo = new THREE.BoxGeometry(2, 2, 2);
             const targetMat = new THREE.MeshStandardMaterial({ color: 0xe94560, emissive: 0x440000 });
             const target = new THREE.Mesh(targetGeo, targetMat);
             
-           
+            // Xuất hiện ngẫu nhiên xung quanh người chơi
             target.position.set(
                 (Math.random() - 0.5) * 60,
                 Math.random() * 5 + 2,
                 (Math.random() - 0.5) * 60
             );
-           
+            // Hướng di chuyển ngẫu nhiên
             target.userData = { 
                 velocity: new THREE.Vector3((Math.random()-0.5)*0.1, 0, (Math.random()-0.5)*0.1) 
             };
             targets.push(target);
             scene.add(target);
         }
-        setInterval(spawnTarget, 2000); 
+        setInterval(spawnTarget, 2000); // Cứ 2 giây tạo 1 con mới
 
-       
+        // --- 8. VÒNG LẶP GAME (GAME LOOP) ---
         const clock = new THREE.Clock();
         const playerSpeed = 12;
 
@@ -207,37 +207,41 @@
             const delta = clock.getDelta();
 
             if (document.pointerLockElement === document.body) {
-                
+                // --- Xử lý di chuyển người chơi ---
                 const direction = new THREE.Vector3();
                 const frontVector = new THREE.Vector3(0, 0, (moveBackward ? 1 : 0) - (moveForward ? 1 : 0));
                 const sideVector = new THREE.Vector3((moveRight ? 1 : 0) - (moveLeft ? 1 : 0), 0, 0);
                 
                 direction.copy(frontVector).applyQuaternion(camera.quaternion);
                 direction.add(sideVector.applyQuaternion(camera.quaternion));
-                direction.y = 0; 
+                direction.y = 0; // Giữ người chơi trên mặt đất, không cho bay lên khi ngước nhìn lên
                 direction.normalize();
                 
                 camera.position.addScaledVector(direction, playerSpeed * delta);
 
-               
+                // --- Xử lý vật lý đạn ---
                 for (let i = bullets.length - 1; i >= 0; i--) {
                     const b = bullets[i];
-                    b.position.addScaledVector(b.userData.direction, 60 * delta); 
+                    b.position.addScaledVector(b.userData.direction, 60 * delta); // Tốc độ đạn bay
                     b.userData.aliveTime += delta;
 
-                   
+                    // Xóa đạn nếu bay quá xa (quá 2 giây)
                     if (b.userData.aliveTime > 2) {
                         scene.remove(b);
                         bullets.splice(i, 1);
                         continue;
                     }
 
-                   
+                    // Kiểm tra va chạm giữa đạn và mục tiêu
                     for (let j = targets.length - 1; j >= 0; j--) {
                         const t = targets[j];
                         if (b.position.distanceTo(t.position) < 1.5) {
-                            
+                            // Tạo hiệu ứng trúng mục tiêu
                             score += 10;
                             document.getElementById('score').innerText = score;
                             
                             scene.remove(t);
+                            targets.splice(j, 1);scene.remove(b);bullets.splice(i, 1);break;}}}// --- Xử lý di chuyển và hoạt ảnh của mục tiêu ---
+                for (let i = 0; i < targets.length; i++) {const t = targets[i];t.position.add(t.userData.velocity);t.rotation.x += 0.01;t.rotation.y += 0.02;// Giữ mục tiêu không bay quá xa bản đồif 
+                                                          (Math.abs(t.position.x) > 50 || Math.abs(t.position.z) > 50) {t.userData.velocity.negate();}}}renderer.render(scene, camera);}// Tự động thay đổi kích thước game khi phóng to/thu nhỏ trình duyệt
+        window.addEventListener('resize', () => {camera.aspect = window.innerWidth / window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth, window.innerHeight);});animate();
