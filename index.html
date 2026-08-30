@@ -1,115 +1,12 @@
 <!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Game Hứng Bóng</title>
-    <style>
-        /* CSS: Định dạng giao diện */
-        body {
-            margin: 0;
-            background-color: #222;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
-        canvas {
-            background-color: #111;
-            border: 4px solid #fff;
-            box-shadow: 0 0 20px rgba(213, 213, 213, 0.3);
-        }
-    </style>
-</head>
-<body>
-
-    <!-- HTML: Thẻ canvas dùng để vẽ game -->
-    <canvas id="gameCanvas" width="400" height="500"></canvas>
-
-    <script>
-        // JavaScript: Xử lý logic trò chơi
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        // Khởi tạo thông số thanh hứng (Paddle)
-        const paddleWidth = 80;
-        const paddleHeight = 15;
-        let paddleX = (canvas.width - paddleWidth) / 2;
-
-        // Khởi tạo thông số quả bóng (Ball)
-        let ballX = canvas.width / 2;
-        let ballY = 30;
-        let ballRadius = 10;
-        let ballSpeedY = 3;
-
-        // Điểm số và trạng thái game
-        let score = 0;
-        let isGameOver = false;
-
-        // Lắng nghe sự kiện di chuyển chuột để điều khiển thanh hứng
-        document.addEventListener("mousemove", (e) => {
-            const relativeX = e.clientX - canvas.getBoundingClientRect().left;
-            if (relativeX > 0 && relativeX < canvas.width) {
-                paddleX = relativeX - paddleWidth / 2;
-            }
-        });
-
-        // Hàm cập nhật logic và vẽ lại màn hình liên tục
-        function draw() {
-            if (isGameOver) {
-                ctx.fillStyle = "white";
-                ctx.font = "24px Arial";
-                ctx.fillText("GAME OVER", canvas.width / 2 - 70, canvas.height / 2);
-                ctx.font = "16px Arial";
-                ctx.fillText("F5 để chơi lại", canvas.width / 2 - 45, canvas.height / 2 + 30);
-                return;
-            }
-
-            // Xóa màn hình cũ để vẽ khung hình mới
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Vẽ quả bóng
-            ctx.beginPath();
-            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-            ctx.fillStyle = "#ff4757";
-            ctx.fill();
-            ctx.closePath();
-
-            // Vẽ thanh hứng
-            ctx.beginPath();
-            ctx.rect(paddleX, canvas.height - paddleHeight - 10, paddleWidth, paddleHeight);
-            ctx.fillStyle = "#2ed573";
-            ctx.fill();
-            ctx.closePath();
-
-            // Vẽ điểm số
-            ctx.fillStyle = "white";
-            ctx.font = "16px Arial";
-            ctx.fillText("Điểm: " + score, 15, 25);
-
-            // Xử lý di chuyển quả bóng rơi xuống
-            ballY += ballSpeedY;
-
-            // Kiểm tra va chạm với thanh hứng
-            if (ballY + ballRadius > canvas.height - paddleHeight - 10) {
-                if (ballX > paddleX && ballX < paddleX + paddleWidth) {
-                    score++;
-                    ballY = 0; // Đưa bóng về đỉnh màn hình
-                    ballX = Math.random() * (canvas.width - ballRadius * 2) + ballRadius; // Ngẫu nhiên vị trí X
-                    ballSpeedY += 0.3; // Tăng dần tốc độ để game khó hơn
-                } else if (ballY > canvas.height) {
-                    isGameOver = true;
-                }
-            }
-
-            // Gọi lại hàm draw liên tục tạo hiệu ứng chuyển động
-            requestAnimationFrame(draw);
-        }
-
-        // Bắt đầu chạy game
-        draw();
-    </script>
-</body>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Các tựa game:</title>
+  </head>
+  <body>
+   <h3><a href="Game_Hung_Bong.html">Game Hứng Bóng</a></h3>
+    <hr>
+    <h3><a href="Fps_Game.html">Game Bắn Súng</a></h3>
+  </body>
 </html>
