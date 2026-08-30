@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Game Bắn Máy Bay Chuẩn 100%</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        canvas {
+            background-color: #000;
+            border: 4px solid #fff;
+        }
+        /* Nút bắt đầu để sửa lỗi trình duyệt không chịu load game */
+        #startBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #startBtn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="500" height="600"></canvas>
+        <button id="startBtn" onclick="startGame()">BẤM VÀO ĐÂY ĐỂ BẮT ĐẦU CHƠI</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const startBtn = document.getElementById("startBtn");
+
+        // Cấu hình đối tượng Tàu của người chơi
+        const player = {
+            x: 225,
+            y: 540,
+            width: 50,
+            height: 30,
+            speed: 7
+        };
+
+        // Mảng lưu trữ đạn và kẻ địch
+        const bullets = [];
+        const enemies = [];
+        
+        let score = 0;
+        let isGameOver = false;
+        let gameInterval = null;
+        let spawnInterval = null;
+
+        // Trạng thái nhấn nút bàn phím
+        const keys = { KeyA: false, KeyD: false };
+
+        // Lắng nghe sự kiện bàn phím
+        window.addEventListener("keydown", (e) => {
+            if (e.code in keys) keys[e.code] = true;
+            
+            // Nhấn Spacebar để bắn đạn
+            if (e.code === "Space" && !isGameOver) {
+                bullets.push({
+                    x: player.x + player.width / 2 - 4,
+                    y: player.y,
+                    width: 8,
+                    height: 15,
+                    speed: 8
+                });
+            }
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.code in keys) keys[e.code] = false;
+        });
+
+        // Hàm tạo kẻ địch rơi từ trên xuống
+        function spawnEnemy() {
+            if (isGameOver) return;
+            enemies.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                width: 30,
+                height: 30,
+                speed: 3
+            });
+        }
+
+        // Hàm khởi chạy trò chơi khi người dùng click nút
+        function startGame() {
+            // Ẩn nút bấm đi
+            startBtn.style.display = "none";
+            
+            // Reset thông số nếu chơi lại
+            score = 0;
+            isGameOver = false;
+            bullets.length = 0;
+            enemies.length = 0;
+            player.x = 225;
+
+            // Xóa các bộ chạy cũ nếu có để tránh trùng lặp tốc độ
+            clearInterval(gameInterval);
+            clearInterval(spawnInterval);
+
+            // Chạy vòng lặp game chính (Cập nhật 60 khung hình/giây)
+            gameInterval = setInterval(updateGame, 1000 / 60);
+            
+            // Cứ mỗi 1 giây tạo ra 1 kẻ địch mới
+            spawnInterval = setInterval(spawnEnemy, 1000);
+        }
+
+        // Vòng lặp xử lý logic và vẽ hình ảnh
+        function updateGame() {
+            if (isGameOver) {
+                clearInterval(gameInterval);
+                clearInterval(spawnInterval);
+                
+                // Vẽ màn hình Game Over
+                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "#ff4d4d";
+                ctx.font = "bold 30px Arial";
+                ctx.fillText("BẠN ĐÃ THUA!", canvas.width / 2 - 100, canvas.height / 2 - 20);
+                
+                ctx.fillStyle = "#fff";
+                ctx.font = "20px Arial";
+                ctx.fillText("Điểm của bạn: " + score, canvas.width / 2 - 60, canvas.height / 2 + 20);
+                
+                // Hiện lại nút bấm để người chơi chơi lại
+                startBtn.innerText = "CHƠI LẠI";
+                startBtn.style.display = "block";
+                return;
+            }
+
+            // 1. XÓA NỀN CŨ
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. DI CHUYỂN NGƯỜI CHƠI (TÀU VŨ TRỤ)
+            if (keys.KeyA && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys.KeyD && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Vẽ Tàu vũ trụ (Khối màu xanh lá)
+            ctx.fillStyle = "#00ff00";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 3. XỬ LÝ ĐẠN BAY
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.y -= b.speed; // Đạn bay lên
+
+                // Vẽ viên đạn (Vạch màu vàng)
+                ctx.fillStyle = "#ffff00";
+                ctx.fillRect(b.x, b.y, b.width, b.height);
+
+                // Xóa đạn khi bay khỏi đỉnh màn hình
+                if (b.y < 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 4. XỬ LÝ KẢ ĐỊCH RƠI
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.y += e.speed; // Kẻ địch rơi xuống
+
+                // Vẽ kẻ địch (Khối màu đỏ)
+                ctx.fillStyle = "#ff0000";
+                ctx.fillRect(e.x, e.y, e.width, e.height);
+
+                // Kiểm tra nếu kẻ địch chạm đáy màn hình -> Game Over
+                if (e.y + e.height > canvas.height) {
+                    isGameOver = true;
+                }
+
+                // Kiểm tra va chạm giữa tất cả các viên đạn với kẻ địch này
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    let b = bullets[j];
+
+                    // Thuật toán kiểm tra va chạm giữa 2 hình hộp (AABB Collision)
+                    if (b.x < e.x + e.width &&
+                        b.x + b.width > e.x &&
+                        b.y < e.y + e.height &&
+                        b.y + b.height > e.y) {
+                        
+                        // Nếu chạm nhau: Xóa cả đạn và kẻ địch, tăng điểm
+                        enemies.splice(i, 1);
+                        bullets.splice(j, 1);
+                        score += 10;
+                        break; 
+                    }
+                }
+            }
+
+            // 5. VẼ ĐIỂM SỐ LÊN GÓC MÀN HÌNH
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "20px Arial";
+            ctx.fillText("Điểm: " + score, 20, 30);
+        }
+    </script>
+</body>
+</html>
